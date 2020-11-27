@@ -2,7 +2,72 @@ import os
 import numpy as np
 import csv
 import torch
+import torchvision
+import torchvision.transforms.functional as TF
 from PIL import Image
+
+class Rotate(object):
+    """Rotate the image to landscape.
+    Args:
+        None
+    """
+    def __init__(self):
+        pass
+
+    def __call__(self, sample):
+        img, target = sample['image'], sample['target']
+        h, w = img.shape[2:]
+        if h > w:
+            img = torch.transpose(img, 2, 3)
+            target['boxes'] = target['boxes'][:,[1,0,3,2]]
+        return {'img': img, 'target': target}
+
+
+class Rescale(object):
+    """Rescale the image in a sample to a given size.
+
+    Args:
+        output_size (tuple or int): Desired output size. If tuple, output is
+            matched to output_size. If int, smaller of image edges is matched
+            to output_size keeping aspect ratio the same.
+    """
+    def __init__(self, output_size):
+        assert isinstance(output_size, (int, tuple))
+        self.output_size = output_size
+
+    def __call__(self, sample):
+        # image, landmarks = sample['image'], sample['landmarks']
+        image, target = sample['image'], sample['target']
+        h, w = image.shape[2:]
+        assert h > w, 'image isn\'t in landscape.'
+        assert w == 1024, 'image size is incorrect.'
+        assert self.output_size[1] == 1024, 'output size is incorrect.'
+
+        if isinstance(self.output_size, int):
+            if h > w:
+                new_h, new_w = self.output_size * h / w, self.output_size
+            else:
+                new_h, new_w = self.output_size, self.output_size * w / h
+        else:
+            new_h, new_w = self.output_size
+
+        new_h, new_w = int(new_h), int(new_w)
+
+        img = TF.resize(image, (new_h, new_w))
+
+        # h and w are swapped for landmarks because for images,
+        # x and y axes are axis 1 and 0 respectively
+        # landmarks = landmarks * [new_w / w, new_h / h]
+        target['boxes'][:, ::2] = target['boxes'][:, ::2] * new_w / w
+        target['boxes'][:, 1::2] = target['boxes'][:, 1::2] * new_h / h
+
+        return {'image': img, 'target': target}
+
+def get_transform(output_size=(768, 1024)):
+    return torchvision.transforms.Compose([
+        Rotate(),
+        Rescale(output_size)
+    ])
 
 
 class OpenImagesDataset(object):
@@ -23,7 +88,10 @@ class OpenImagesDataset(object):
         img_path = os.path.join(self.img_dir_path, self.imgs[idx])
         box_path = os.path.join(self.img_dir_path, 'labels', self.boxes[idx])
         
-        img = Image.open(img_path).convert("RGB")
+        img = Image.open(img_path)#.convert("RGB")
+        img = TF.to_tensor(img)
+        img.unsqueeze_(0)
+
         boxes = []
         with open(box_path, newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter=' ')
@@ -53,7 +121,12 @@ class OpenImagesDataset(object):
         if self.transforms is not None:
             img, target = self.transforms(img, target)
 
-        return img, target
+        sample = {
+            "img": img,
+            "target": target
+        }
+
+        return sample
 
     def __len__(self):
         return len(self.imgs)
