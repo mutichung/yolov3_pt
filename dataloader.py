@@ -16,9 +16,9 @@ class Rotate(object):
 
     def __call__(self, sample):
         img, target = sample['img'], sample['target']
-        h, w = img.shape[2:]
+        h, w = img.shape[1:]
         if h > w:
-            img = torch.transpose(img, 2, 3)
+            img = torch.transpose(img, 1, 2)
             target['boxes'] = target['boxes'][:,[1,0,3,2]]
         return {'img': img, 'target': target}
 
@@ -38,7 +38,7 @@ class Rescale(object):
     def __call__(self, sample):
         # image, landmarks = sample['image'], sample['landmarks']
         image, target = sample['img'], sample['target']
-        h, w = image.shape[2:]
+        h, w = image.shape[1:]
         assert h <= w, 'image isn\'t in landscape.'
         assert w == 1024, 'image size is incorrect.'
         assert self.output_size[1] == 1024, 'output size is incorrect.'
@@ -90,7 +90,7 @@ class OpenImagesDataset(object):
         
         img = Image.open(img_path)#.convert("RGB")
         img = TF.to_tensor(img)
-        img.unsqueeze_(0)
+        # img.unsqueeze_(0)
 
         boxes = []
         with open(box_path, newline='') as csvfile:
