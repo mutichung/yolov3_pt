@@ -15,7 +15,7 @@ class Rotate(object):
         pass
 
     def __call__(self, sample):
-        img, target = sample['image'], sample['target']
+        img, target = sample['img'], sample['target']
         h, w = img.shape[2:]
         if h > w:
             img = torch.transpose(img, 2, 3)
@@ -37,9 +37,9 @@ class Rescale(object):
 
     def __call__(self, sample):
         # image, landmarks = sample['image'], sample['landmarks']
-        image, target = sample['image'], sample['target']
+        image, target = sample['img'], sample['target']
         h, w = image.shape[2:]
-        assert h > w, 'image isn\'t in landscape.'
+        assert h <= w, 'image isn\'t in landscape.'
         assert w == 1024, 'image size is incorrect.'
         assert self.output_size[1] == 1024, 'output size is incorrect.'
 
@@ -61,7 +61,7 @@ class Rescale(object):
         target['boxes'][:, ::2] = target['boxes'][:, ::2] * new_w / w
         target['boxes'][:, 1::2] = target['boxes'][:, 1::2] * new_h / h
 
-        return {'image': img, 'target': target}
+        return {'img': img, 'target': target}
 
 def get_transform(output_size=(768, 1024)):
     return torchvision.transforms.Compose([
@@ -118,14 +118,10 @@ class OpenImagesDataset(object):
         target["image_id"] = image_id
         target["area"] = area
 
+        sample = {'img': img, 'target': target}
+
         if self.transforms is not None:
-            img, target = self.transforms(img, target)
-
-        sample = {
-            "img": img,
-            "target": target
-        }
-
+            sample = self.transforms(sample)
         return sample
 
     def __len__(self):
